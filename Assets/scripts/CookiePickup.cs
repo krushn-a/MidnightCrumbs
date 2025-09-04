@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using StarterAssets;
 
@@ -8,6 +9,9 @@ public class CookiePickup : MonoBehaviour
     public int amount = 1;
     public AudioClip pickupSfx;
     public GameObject pickupVfxPrefab; // optional particle system prefab
+
+    // Raised when the cookie is collected (before it is destroyed)
+    public event Action<CookiePickup> Collected;
 
     private void Reset()
     {
@@ -25,14 +29,22 @@ public class CookiePickup : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // Find the player and their inventory
+        // Find the player controller first
         var fpc = other.GetComponentInParent<FirstPersonController>();
         if (fpc == null) return;
 
-        var inventory = fpc.GetComponent<PlayerInventory>();
+        // Try to get inventory from same object, then parent/children, then fallback scene search
+        PlayerInventory inventory = fpc.GetComponent<PlayerInventory>()
+            ?? fpc.GetComponentInParent<PlayerInventory>()
+            ?? fpc.GetComponentInChildren<PlayerInventory>()
+#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
+            ?? UnityEngine.Object.FindFirstObjectByType<PlayerInventory>();
+#else
+            ?? FindObjectOfType<PlayerInventory>();
+#endif
         if (inventory == null)
         {
-            Debug.LogWarning("CookiePickup: PlayerInventory not found on player.");
+            Debug.LogWarning("CookiePickup: PlayerInventory not found on player hierarchy.");
             return;
         }
 
@@ -43,6 +55,9 @@ public class CookiePickup : MonoBehaviour
 
         if (pickupVfxPrefab != null)
             Instantiate(pickupVfxPrefab, transform.position, Quaternion.identity);
+
+    // Notify listeners that this cookie has been collected
+    Collected?.Invoke(this);
 
         Destroy(gameObject);
     }

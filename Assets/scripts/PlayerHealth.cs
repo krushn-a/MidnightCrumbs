@@ -1,18 +1,23 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
+using DG.Tweening;
 
 public class PlayerHealth : MonoBehaviour
 {
-    [Header("Health Settings")]
-    public int maxHealth = 100;
-    public int currentHealth = 100;
+    [SerializeField] private Image HealthBarFillImage;
+    [SerializeField] private Image HealthBarTrailingImage;
+    [SerializeField] private float HealthBarTrailDelay = 0.4f;
 
-    [Header("UI Auto-Setup")]
-    public bool autoCreateUI = true;
-    public string uiTextObjectName = "HealthText";
-    public string healthLabelFormat = "Health: {0}/{1}";
-    public TMP_Text healthText; // Auto-created if not assigned
+    [Header("Health Settings")]
+    [SerializeField] private float maxHealth = 100f;
+    [SerializeField] private float currentHealth = 100f;
+
+    //[Header("UI Auto-Setup")]
+    //public bool autoCreateUI = true;
+    //public string uiTextObjectName = "HealthText";
+    //public string healthLabelFormat = "Health: {0}/{1}";
+    //public TMP_Text healthText; // Auto-created if not assigned
 
     [Header("Audio")]
     public AudioClip hurtSfx;          // assign a clip from Assets/sounds
@@ -20,13 +25,13 @@ public class PlayerHealth : MonoBehaviour
     public float hurtSfxMinInterval = 0.15f;
     private AudioSource _audio;
     private float _nextHurtSfxTime;
-
+    private float ratio = 1f;
     public bool IsAlive => currentHealth > 0;
 
-    private void OnEnable()
+    private void Awake()
     {
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-        EnsureUI();
+        HealthBarFillImage.fillAmount = 1f;
+        HealthBarTrailingImage.fillAmount = 1f;
         EnsureAudioSource();
         UpdateUI();
     }
@@ -42,7 +47,8 @@ public class PlayerHealth : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (amount <= 0 || !IsAlive) return;
-        currentHealth = Mathf.Max(0, currentHealth - amount);
+        currentHealth = currentHealth - amount;
+        ratio = currentHealth / maxHealth;
         PlayHurtSfx();
         UpdateUI();
         if (currentHealth == 0)
@@ -64,35 +70,35 @@ public class PlayerHealth : MonoBehaviour
         // Optional: disable controls, trigger respawn, etc.
     }
 
-    private void EnsureUI()
-    {
-        if (healthText != null || !autoCreateUI) return;
+    //private void EnsureUI()
+    //{
+    //    if (healthText != null || !autoCreateUI) return;
 
-        // Create or reuse a Canvas for HUD
-        var canvas = FindObjectOfType<Canvas>();
-        if (canvas == null)
-        {
-            var cgo = new GameObject("HUD");
-            canvas = cgo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            cgo.AddComponent<CanvasScaler>();
-            cgo.AddComponent<GraphicRaycaster>();
-        }
+    //    // Create or reuse a Canvas for HUD
+    //    var canvas = FindObjectOfType<Canvas>();
+    //    if (canvas == null)
+    //    {
+    //        var cgo = new GameObject("HUD");
+    //        canvas = cgo.AddComponent<Canvas>();
+    //        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+    //        cgo.AddComponent<CanvasScaler>();
+    //        cgo.AddComponent<GraphicRaycaster>();
+    //    }
 
-        var textGO = new GameObject(uiTextObjectName);
-        textGO.transform.SetParent(canvas.transform, false);
-        var rt = textGO.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0, 1);
-        rt.anchorMax = new Vector2(0, 1);
-        rt.pivot = new Vector2(0, 1);
-        rt.anchoredPosition = new Vector2(15, -50); // below cookies
+    //    var textGO = new GameObject(uiTextObjectName);
+    //    textGO.transform.SetParent(canvas.transform, false);
+    //    var rt = textGO.AddComponent<RectTransform>();
+    //    rt.anchorMin = new Vector2(0, 1);
+    //    rt.anchorMax = new Vector2(0, 1);
+    //    rt.pivot = new Vector2(0, 1);
+    //    rt.anchoredPosition = new Vector2(15, -50); // below cookies
 
-        var tmp = textGO.AddComponent<TextMeshProUGUI>();
-        tmp.fontSize = 28;
-        tmp.alignment = TextAlignmentOptions.TopLeft;
-        tmp.color = Color.red;
-        healthText = tmp;
-    }
+    //    var tmp = textGO.AddComponent<TextMeshProUGUI>();
+    //    tmp.fontSize = 28;
+    //    tmp.alignment = TextAlignmentOptions.TopLeft;
+    //    tmp.color = Color.red;
+    //    healthText = tmp;
+    //}
 
     private void EnsureAudioSource()
     {
@@ -118,9 +124,11 @@ public class PlayerHealth : MonoBehaviour
 
     private void UpdateUI()
     {
-        if (healthText != null)
-        {
-            healthText.text = string.Format(healthLabelFormat, currentHealth, maxHealth);
-        }
+        Sequence seq = DOTween.Sequence();
+        seq.Append(HealthBarFillImage.DOFillAmount(ratio, 0.25f)).SetEase(Ease.InOutSine);
+        seq.AppendInterval(HealthBarTrailDelay);
+        seq.Append(HealthBarTrailingImage.DOFillAmount(ratio, 0.3f)).SetEase(Ease.InOutSine);
+
+        seq.Play();
     }
 }

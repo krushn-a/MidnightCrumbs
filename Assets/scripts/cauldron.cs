@@ -14,6 +14,14 @@ public class cauldron : MonoBehaviour
     public Vector3 spawnOffset = new Vector3(0, 0.5f, 0);
     public Vector3 launchImpulse = new Vector3(0, 2f, 0); // optional pop-out
 
+    [Header("Batch Spawn")]
+    [Tooltip("How many cookies to spawn each time you press the interact key.")]
+    public int cookiesPerInteract = 3;
+    [Tooltip("How many distinct spawn points to randomly select from the array when spawning a batch.")]
+    public int spawnPointsToUse = 2;
+    [Tooltip("Distribute cookies evenly across the selected spawn points (round-robin). If false, pick a random selected point for each cookie.")]
+    public bool distributeAcrossSelected = true;
+
     [Header("Multiple Spawn Points")]
     public Transform[] spawnPoints; // Optional: if set, cookies spawn from these
     public bool randomizeSpawnPoint = true;
@@ -22,6 +30,7 @@ public class cauldron : MonoBehaviour
     [Header("Cooldown")]
     public float cooldownSeconds = 2f;
     private float _cooldownUntil = 0f;
+    private int _outstandingBatchCookies = 0;
 
     [Header("UI Prompt")]
     public TMP_Text promptText; // "Press E to collect"
@@ -77,7 +86,7 @@ public class cauldron : MonoBehaviour
 
             if (Input.GetKeyDown(interactKey) && IsReady())
             {
-                SpawnCookie();
+                SpawnCookiesBatch();
             }
         }
     }
@@ -115,9 +124,15 @@ public class cauldron : MonoBehaviour
     private void UpdatePrompt()
     {
         if (promptText == null) return;
-        if (IsReady())
+        if (!IsBatchComplete())
         {
-            promptText.text = $"Press {interactKey} to brew cookie";
+            promptText.text = $"Collect all cookies first ({_outstandingBatchCookies} left)";
+        }
+        else if (IsReady())
+        {
+            int n = Mathf.Max(1, cookiesPerInteract);
+            string label = n == 1 ? "cookie" : "cookies";
+            promptText.text = $"Press {interactKey} to brew {n} {label}";
         }
         else
         {
@@ -126,9 +141,10 @@ public class cauldron : MonoBehaviour
         }
     }
 
-    private bool IsReady() => Time.time >= _cooldownUntil;
+    private bool IsReady() => Time.time >= _cooldownUntil && IsBatchComplete();
+    private bool IsBatchComplete() => _outstandingBatchCookies <= 0;
 
-    private void SpawnCookie()
+    private void SpawnCookiesBatch()
     {
         if (cookiePrefab == null)
         {
@@ -136,28 +152,91 @@ public class cauldron : MonoBehaviour
             return;
         }
 
-        Vector3 pos; Quaternion rot;
-        if (!TryGetFreeSpawnPose(out pos, out rot))
+    int count = Mathf.Max(1, cookiesPerInteract);
+    _outstandingBatchCookies = 0; // reset and recount real spawns
+
+        // Prepare a random subset of spawn points (distinct) if configured
+        Transform[] selected = null;
+        int selectedCount = 0;
+        if (spawnPoints != null && spawnPoints.Length > 0 && spawnPointsToUse > 0)
         {
-            Debug.Log("Cauldron: No free spawn spot found (all occupied).");
-            return;
+            selected = ChooseDistinctSpawnPoints(spawnPoints, spawnPointsToUse, out selectedCount);
         }
 
-        GameObject cookie = Instantiate(cookiePrefab, pos, rot);
-
-        // Optional little pop-up impulse if there is a rigidbody
-        if (cookie.TryGetComponent<Rigidbody>(out var rb))
+        for (int i = 0; i < count; i++)
         {
-            rb.AddForce(launchImpulse, ForceMode.Impulse);
+            Transform baseT = null;
+            if (selectedCount > 0)
+            {
+                if (distributeAcrossSelected)
+                {
+                    baseT = selected[i % selectedCount];
+                }
+                else
+                {
+                    int idx = Random.Range(0, selectedCount);
+                    baseT = selected[idx];
+                }
+            }
+            else
+            {
+                // Fallback to single spawnPoint or cauldron position
+                baseT = spawnPoint;
+            }
+
+            Vector3 pos; Quaternion rot;
+            bool found = false;
+            if (baseT != null)
+            {
+                found = TryGetFreeSpawnPoseNear(baseT, out pos, out rot);
+                if (!found)
+                {
+                    // As a fallback, try anywhere using existing logic
+                    found = TryGetFreeSpawnPose(out pos, out rot);
+                }
+            }
+            else
+            {
+                found = TryGetFreeSpawnPose(out pos, out rot);
+            }
+
+            if (!found)
+            {
+                Debug.Log("Cauldron: No free spawn spot found for cookie in batch (occupied). Skipping one.");
+                continue;
+            }
+
+            GameObject cookie = Instantiate(cookiePrefab, pos, rot);
+
+            // Optional little pop-up impulse if there is a rigidbody
+            if (cookie.TryGetComponent<Rigidbody>(out var rb))
+            {
+                rb.AddForce(launchImpulse, ForceMode.Impulse);
+            }
+
+            // Track collection for batch gating
+            var pickup = cookie.GetComponent<CookiePickup>();
+            if (pickup != null)
+            {
+                _outstandingBatchCookies++;
+                pickup.Collected += OnCookieCollected;
+            }
         }
 
-        // Start cooldown
+        // Start cooldown after the batch
         if (cooldownSeconds > 0f)
             _cooldownUntil = Time.time + cooldownSeconds;
 
         // Hide prompt after spawning (optional)
         SetPrompt(false);
         _playerInRange = false;
+    }
+
+    private void OnCookieCollected(CookiePickup cp)
+    {
+        // Unsubscribe to avoid leaks
+        if (cp != null) cp.Collected -= OnCookieCollected;
+        _outstandingBatchCookies = Mathf.Max(0, _outstandingBatchCookies - 1);
     }
 
     private Transform ChooseSpawnPoint()
@@ -240,6 +319,65 @@ public class cauldron : MonoBehaviour
 
         pos = Vector3.zero; rot = Quaternion.identity;
         return false;
+    }
+
+    // Try to spawn near a specific spawn point with jitter and occupancy checks
+    private bool TryGetFreeSpawnPoseNear(Transform baseT, out Vector3 pos, out Quaternion rot)
+    {
+        Vector3 basePos = baseT != null ? baseT.position : transform.position + spawnOffset;
+        Quaternion baseRot = baseT != null ? baseT.rotation : Quaternion.identity;
+
+        for (int attempt = 0; attempt < maxSpawnAttempts; attempt++)
+        {
+            Vector3 candidatePos = basePos;
+            if (attempt > 0 && spawnJitterRadius > 0f)
+            {
+                var c = Random.insideUnitCircle * spawnJitterRadius;
+                candidatePos += new Vector3(c.x, 0f, c.y);
+            }
+
+            if (!IsOccupied(candidatePos, spawnClearRadius))
+            {
+                pos = candidatePos;
+                rot = baseRot;
+                return true;
+            }
+        }
+
+        pos = Vector3.zero; rot = Quaternion.identity;
+        return false;
+    }
+
+    // Choose up to 'count' distinct, non-null transforms randomly from the array
+    private Transform[] ChooseDistinctSpawnPoints(Transform[] all, int count, out int selectedCount)
+    {
+        // Gather non-null
+        int n = 0;
+        for (int i = 0; i < all.Length; i++) if (all[i] != null) n++;
+        if (n == 0)
+        {
+            selectedCount = 0;
+            return null;
+        }
+
+        // Copy to temp
+        Transform[] temp = new Transform[n];
+        int idx = 0;
+        for (int i = 0; i < all.Length; i++) if (all[i] != null) temp[idx++] = all[i];
+
+        // Fisher-Yates partial shuffle up to k
+        int k = Mathf.Clamp(count, 1, temp.Length);
+        for (int i = 0; i < k; i++)
+        {
+            int r = Random.Range(i, temp.Length);
+            var t = temp[i]; temp[i] = temp[r]; temp[r] = t;
+        }
+
+        // Slice first k
+        Transform[] result = new Transform[k];
+        for (int i = 0; i < k; i++) result[i] = temp[i];
+        selectedCount = k;
+        return result;
     }
 
     private bool IsOccupied(Vector3 position, float radius)

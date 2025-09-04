@@ -1,22 +1,33 @@
 using UnityEngine;
 using TMPro;
-using UnityEngine.UI;
 
 public class PlayerInventory : MonoBehaviour
 {
+    [SerializeField] private GameObject Flashlight;
+
+    [Header("Audio Source")]
+    [SerializeField] private AudioClip FlashSound;
+    private AudioSource FlashSoundSource;
+
     [Header("Cookies")]
     public int cookieCount = 0;
-    public TMP_Text cookieText; // UI is auto-created if not assigned
+    // Bound to scene object named "CookieText"
+    public TMP_Text cookieText;
 
-    [Header("UI Auto-Setup")]
-    public bool autoCreateUI = true;
-    public string uiTextObjectName = "CookiesText";
-    public string cookieLabelFormat = "Cookies: {0}";
+    [Header("UI Binding")]
+    public bool autoFindCookieText = true;
+    public string cookieTextObjectName = "CookieText";
+    public string cookieLabelFormat = "{0}"; // show just the number next to the cookie icon
 
     [Header("Witch Reaction")]
     public WitchAI witch;            // assign in Inspector or auto-found
     public bool autoFindWitch = true;
 
+
+    private void Update()
+    {
+        FlashLightToggle();
+    }
     public void AddCookies(int amount)
     {
         if (amount == 0) return;
@@ -38,42 +49,13 @@ public class PlayerInventory : MonoBehaviour
         UpdateUI();
     }
 
-    private void OnEnable()
+    private void Awake()
     {
-        EnsureUI();
+        //EnsureUIBinding();
         if (autoFindWitch && witch == null)
             EnsureWitch();
         UpdateUI();
-    }
-
-    private void EnsureUI()
-    {
-        if (cookieText != null || !autoCreateUI) return;
-
-        // Create a minimal HUD
-        var canvas = FindObjectOfType<Canvas>();
-        if (canvas == null)
-        {
-            var cgo = new GameObject("HUD");
-            canvas = cgo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            cgo.AddComponent<CanvasScaler>();
-            cgo.AddComponent<GraphicRaycaster>();
-        }
-
-        var textGO = new GameObject(uiTextObjectName);
-        textGO.transform.SetParent(canvas.transform, false);
-        var rt = textGO.AddComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0, 1);
-        rt.anchorMax = new Vector2(0, 1);
-        rt.pivot = new Vector2(0, 1);
-        rt.anchoredPosition = new Vector2(15, -15);
-
-        var tmp = textGO.AddComponent<TextMeshProUGUI>();
-        tmp.fontSize = 28;
-        tmp.alignment = TextAlignmentOptions.TopLeft;
-        tmp.color = Color.white;
-        cookieText = tmp;
+        EnsureAudioSource();
     }
 
     private void EnsureWitch()
@@ -89,9 +71,49 @@ public class PlayerInventory : MonoBehaviour
 
     private void UpdateUI()
     {
+        if (cookieText == null && autoFindCookieText)
+        {
+            //EnsureUIBinding();
+        }
         if (cookieText != null)
         {
-            cookieText.text = string.Format(cookieLabelFormat, cookieCount);
+            cookieText.text = cookieCount.ToString();
         }
+    }
+
+    private void FlashLightToggle() 
+    {
+        if (Input.GetKeyDown(KeyCode.F)) 
+        {
+            if (Flashlight.activeSelf)
+            {
+                Flashlight.SetActive(false);
+                PlayFlashSound();
+            }
+            else
+            {
+                Flashlight.SetActive(true);
+                PlayFlashSound();
+            }
+        }
+    }
+
+    private void EnsureAudioSource()
+    {
+        if (FlashSoundSource == null)
+        {
+            FlashSoundSource = GetComponent<AudioSource>();
+            if (FlashSoundSource == null)
+                FlashSoundSource = gameObject.AddComponent<AudioSource>();
+
+            FlashSoundSource.playOnAwake = false;
+            FlashSoundSource.spatialBlend = 0f; // 2D UI-like sound
+        }
+    }
+
+    private void PlayFlashSound() 
+    {
+        if (FlashSound == null || FlashSoundSource == null) return;
+        FlashSoundSource.PlayOneShot(FlashSound);
     }
 }
