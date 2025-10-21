@@ -13,19 +13,18 @@ public class PlayerHealth : MonoBehaviour
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private float currentHealth = 100f;
 
-    //[Header("UI Auto-Setup")]
-    //public bool autoCreateUI = true;
-    //public string uiTextObjectName = "HealthText";
-    //public string healthLabelFormat = "Health: {0}/{1}";
-    //public TMP_Text healthText; // Auto-created if not assigned
+    [Header("Death Panel")]
+    [SerializeField] private DeathPanelManager deathPanelManager;
+    [SerializeField] private bool autoFindDeathPanel = true;
 
     [Header("Audio")]
-    public AudioClip hurtSfx;          // assign a clip from Assets/sounds
+    public AudioClip hurtSfx;
     public float hurtVolume = 1f;
     public float hurtSfxMinInterval = 0.15f;
     private AudioSource _audio;
     private float _nextHurtSfxTime;
     private float ratio = 1f;
+
     public bool IsAlive => currentHealth > 0;
 
     private void Awake()
@@ -33,7 +32,22 @@ public class PlayerHealth : MonoBehaviour
         HealthBarFillImage.fillAmount = 1f;
         HealthBarTrailingImage.fillAmount = 1f;
         EnsureAudioSource();
+
+        if (autoFindDeathPanel && deathPanelManager == null)
+        {
+            FindDeathPanelManager();
+        }
+
         UpdateUI();
+    }
+
+    private void FindDeathPanelManager()
+    {
+#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
+        deathPanelManager = Object.FindFirstObjectByType<DeathPanelManager>();
+#else
+        deathPanelManager = FindObjectOfType<DeathPanelManager>();
+#endif
     }
 
     public void SetMaxHealth(int value, bool refill = true)
@@ -51,7 +65,7 @@ public class PlayerHealth : MonoBehaviour
         ratio = currentHealth / maxHealth;
         PlayHurtSfx();
         UpdateUI();
-        if (currentHealth == 0)
+        if (currentHealth <= 0)
         {
             OnDeath();
         }
@@ -67,38 +81,16 @@ public class PlayerHealth : MonoBehaviour
     private void OnDeath()
     {
         Debug.Log("Player died.");
-        // Optional: disable controls, trigger respawn, etc.
+
+        if (deathPanelManager != null)
+        {
+            deathPanelManager.ShowDeathPanel();
+        }
+        else
+        {
+            Debug.LogWarning("DeathPanelManager not found!");
+        }
     }
-
-    //private void EnsureUI()
-    //{
-    //    if (healthText != null || !autoCreateUI) return;
-
-    //    // Create or reuse a Canvas for HUD
-    //    var canvas = FindObjectOfType<Canvas>();
-    //    if (canvas == null)
-    //    {
-    //        var cgo = new GameObject("HUD");
-    //        canvas = cgo.AddComponent<Canvas>();
-    //        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-    //        cgo.AddComponent<CanvasScaler>();
-    //        cgo.AddComponent<GraphicRaycaster>();
-    //    }
-
-    //    var textGO = new GameObject(uiTextObjectName);
-    //    textGO.transform.SetParent(canvas.transform, false);
-    //    var rt = textGO.AddComponent<RectTransform>();
-    //    rt.anchorMin = new Vector2(0, 1);
-    //    rt.anchorMax = new Vector2(0, 1);
-    //    rt.pivot = new Vector2(0, 1);
-    //    rt.anchoredPosition = new Vector2(15, -50); // below cookies
-
-    //    var tmp = textGO.AddComponent<TextMeshProUGUI>();
-    //    tmp.fontSize = 28;
-    //    tmp.alignment = TextAlignmentOptions.TopLeft;
-    //    tmp.color = Color.red;
-    //    healthText = tmp;
-    //}
 
     private void EnsureAudioSource()
     {
@@ -109,7 +101,7 @@ public class PlayerHealth : MonoBehaviour
                 _audio = gameObject.AddComponent<AudioSource>();
 
             _audio.playOnAwake = false;
-            _audio.spatialBlend = 0f; // 2D UI-like sound
+            _audio.spatialBlend = 0f;
         }
     }
 

@@ -20,7 +20,8 @@ public class PlayerInventory : MonoBehaviour
     public string cookieLabelFormat = "{0}"; // show just the number next to the cookie icon
 
     [Header("Witch Reaction")]
-    public WitchAI witch;            // assign in Inspector or auto-found
+    public WitchAI witch;
+    public WitchHealth witchHealth;
     public bool autoFindWitch = true;
 
 
@@ -34,12 +35,21 @@ public class PlayerInventory : MonoBehaviour
         cookieCount = Mathf.Max(0, cookieCount + amount);
         UpdateUI();
 
-        // Increase witch aggression per cookie collected
         EnsureWitch();
-        if (witch != null && amount > 0)
+        EnsureWitchHealth();
+
+        if (amount > 0)
         {
-            for (int i = 0; i < amount; i++)
-                witch.IncreaseAggression();
+            if (witch != null)
+            {
+                for (int i = 0; i < amount; i++)
+                    witch.IncreaseAggression();
+            }
+
+            if (witchHealth != null)
+            {
+                witchHealth.TakeDamage(10f * amount);
+            }
         }
     }
 
@@ -51,9 +61,10 @@ public class PlayerInventory : MonoBehaviour
 
     private void Awake()
     {
-        //EnsureUIBinding();
         if (autoFindWitch && witch == null)
             EnsureWitch();
+        if (autoFindWitch && witchHealth == null)
+            EnsureWitchHealth();
         UpdateUI();
         EnsureAudioSource();
     }
@@ -66,6 +77,16 @@ public class PlayerInventory : MonoBehaviour
         witch = Object.FindFirstObjectByType<WitchAI>();
 #else
         witch = FindObjectOfType<WitchAI>();
+#endif
+    }
+
+    private void EnsureWitchHealth()
+    {
+        if (witchHealth != null) return;
+#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
+        witchHealth = Object.FindFirstObjectByType<WitchHealth>();
+#else
+    witchHealth = FindObjectOfType<WitchHealth>();
 #endif
     }
 

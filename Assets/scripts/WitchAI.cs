@@ -8,13 +8,21 @@ public class WitchAI : MonoBehaviour
     public float runSpeed = 4f;
 
     [Header("Patrol Settings")]
-    public float wanderRadius = 10f;      // random roam area radius
-    public float wanderCooldown = 5f;     // how often to pick new point
+    public float wanderRadius = 10f;
+    public float wanderCooldown = 5f;
     private float wanderTimer;
 
     [Header("Chase Memory")]
-    public float loseSightDelay = 3f;     // seconds before giving up chase
+    public float loseSightDelay = 3f;
     private float loseSightTimer;
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip walkingSound;
+    [SerializeField] private AudioClip runningSound;
+    [SerializeField] private float walkingSoundVolume = 0.5f;
+    [SerializeField] private float runningSoundVolume = 0.7f;
+    private AudioSource audioSource;
+    private bool wasPlayingBeforePause = false;
 
     private const string WITCH_WALK = "isWalking";
     private const string WITCH_RUNNING = "isFoundRunning";
@@ -27,13 +35,16 @@ public class WitchAI : MonoBehaviour
 
     private bool playerVisible;
 
-    public float aggressionLevel = 1f; // starts at 1
+    public float aggressionLevel = 1f;
 
     [Header("Combat")]
     [SerializeField] private int touchDamage = 10;
-    [SerializeField] private float damageInterval = 1.0f; // seconds between hits while in contact
-    [SerializeField] private float hitRadius = 1.2f;       // distance check radius for damage
+    [SerializeField] private float damageInterval = 1.0f;
+    [SerializeField] private float hitRadius = 1.2f;
     private float _nextDamageTime;
+
+    private enum WitchState { Idle, Walking, Running }
+    private WitchState currentState = WitchState.Idle;
 
     void Awake()
     {
@@ -49,6 +60,8 @@ public class WitchAI : MonoBehaviour
                 if (go != null) player = go.transform;
             }
         }
+
+        EnsureAudioSource();
     }
 
     void Start()
@@ -59,38 +72,39 @@ public class WitchAI : MonoBehaviour
 
     void Update()
     {
+        HandlePauseState();
+
         playerVisible = (witch != null) && witch.CanSeePlayer();
 
         if (playerVisible && player != null)
         {
-            // Reset memory timer if we see the player
             loseSightTimer = loseSightDelay;
 
-            // Run toward player
             agent.speed = runSpeed;
             agent.SetDestination(player.position);
             animator.SetBool(WITCH_RUNNING, true);
             animator.SetBool(WITCH_WALK, false);
+
+            SetState(WitchState.Running);
         }
         else
         {
-            // Still chase if timer > 0 (memory effect)
             if (loseSightTimer > 0 && player != null)
             {
                 loseSightTimer -= Time.deltaTime;
                 agent.speed = runSpeed;
-                agent.SetDestination(player.position); // last known position
+                agent.SetDestination(player.position);
                 animator.SetBool(WITCH_RUNNING, true);
                 animator.SetBool(WITCH_WALK, false);
+
+                SetState(WitchState.Running);
             }
             else
             {
-                // Patrol / Wander
                 Wander();
             }
         }
 
-        // Proximity damage (robust even without colliders/triggers)
         ProximityDamage();
     }
 
@@ -98,18 +112,17 @@ public class WitchAI : MonoBehaviour
     {
         wanderTimer += Time.deltaTime;
 
-        // if agent reached destination, wait a little before moving again
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
-            animator.SetBool(WITCH_WALK, false); // idle a bit
+            animator.SetBool(WITCH_WALK, false);
+            SetState(WitchState.Idle);
         }
 
         if (wanderTimer >= wanderCooldown && !agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
-            Vector3 newPos = RandomNavSphere(transform.position, wanderRadius, 3f, -1); // min 3m away
+            Vector3 newPos = RandomNavSphere(transform.position, wanderRadius, 3f, -1);
             NavMeshPath path = new NavMeshPath();
 
-            // only set destination if valid path exists
             if (agent.CalculatePath(newPos, path) && path.status == NavMeshPathStatus.PathComplete)
             {
                 agent.speed = walkSpeed;
@@ -117,11 +130,12 @@ public class WitchAI : MonoBehaviour
                 animator.SetBool(WITCH_WALK, true);
                 animator.SetBool(WITCH_RUNNING, false);
                 wanderTimer = 0;
+
+                SetState(WitchState.Walking);
             }
         }
     }
 
-    // Improved version with minDistance
     public static Vector3 RandomNavSphere(Vector3 origin, float maxDist, float minDist, int layermask)
     {
         Vector3 randDirection;
@@ -130,7 +144,7 @@ public class WitchAI : MonoBehaviour
         {
             randDirection = Random.insideUnitSphere * maxDist;
         }
-        while (randDirection.magnitude < minDist); // keep picking until it's far enough
+        while (randDirection.magnitude < minDist);
 
         randDirection += origin;
 
@@ -142,9 +156,9 @@ public class WitchAI : MonoBehaviour
 
     public void IncreaseAggression()
     {
-        aggressionLevel += 0.5f; // adjust as needed
-        runSpeed += 0.5f;        // make her faster
-        walkSpeed += 0.2f;       // also slightly faster walking
+        aggressionLevel += 0.5f;
+        runSpeed += 0.5f;
+        walkSpeed += 0.2f;
     }
 
     private void ProximityDamage()
@@ -161,7 +175,6 @@ public class WitchAI : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        // visualize hit radius
         Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.35f);
         Gizmos.DrawWireSphere(transform.position, hitRadius);
     }
@@ -184,5 +197,104 @@ public class WitchAI : MonoBehaviour
 
         health.TakeDamage(touchDamage);
         _nextDamageTime = Time.time + damageInterval;
+    }
+
+    private void EnsureAudioSource()
+    {
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        audioSource.playOnAwake = false;
+        audioSource.loop = true;
+        audioSource.spatialBlend = 1f;
+        audioSource.minDistance = 5f;
+        audioSource.maxDistance = 30f;
+    }
+
+    private void HandlePauseState()
+    {
+        if (audioSource == null) return;
+
+        if (Time.timeScale == 0f)
+        {
+            if (audioSource.isPlaying)
+            {
+                wasPlayingBeforePause = true;
+                audioSource.Pause();
+            }
+        }
+        else
+        {
+            if (wasPlayingBeforePause && !audioSource.isPlaying)
+            {
+                audioSource.UnPause();
+                wasPlayingBeforePause = false;
+            }
+        }
+    }
+
+    private void SetState(WitchState newState)
+    {
+        if (currentState == newState) return;
+
+        currentState = newState;
+
+        switch (currentState)
+        {
+            case WitchState.Idle:
+                StopFootstepSounds();
+                break;
+
+            case WitchState.Walking:
+                PlayWalkingSound();
+                break;
+
+            case WitchState.Running:
+                PlayRunningSound();
+                break;
+        }
+    }
+
+    private void PlayWalkingSound()
+    {
+        if (audioSource == null || walkingSound == null) return;
+        if (Time.timeScale == 0f) return;
+
+        if (audioSource.clip != walkingSound)
+        {
+            audioSource.clip = walkingSound;
+            audioSource.volume = walkingSoundVolume;
+            audioSource.Play();
+        }
+    }
+
+    private void PlayRunningSound()
+    {
+        if (audioSource == null || runningSound == null) return;
+        if (Time.timeScale == 0f) return;
+
+        if (audioSource.clip != runningSound)
+        {
+            audioSource.clip = runningSound;
+            audioSource.volume = runningSoundVolume;
+            audioSource.Play();
+        }
+    }
+
+    private void StopFootstepSounds()
+    {
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+            wasPlayingBeforePause = false;
+        }
+    }
+
+    private void OnDisable()
+    {
+        StopFootstepSounds();
     }
 }

@@ -69,7 +69,7 @@ namespace StarterAssets
 		private PlayerInput _playerInput;
 #endif
 		private CharacterController _controller;
-		private StarterAssetsInputs _input;
+		// private StarterAssetsInputs _input;
 		private GameObject _mainCamera;
 
 		private const float _threshold = 0.01f;
@@ -98,7 +98,7 @@ namespace StarterAssets
 		private void Start()
 		{
 			_controller = GetComponent<CharacterController>();
-			_input = GetComponent<StarterAssetsInputs>();
+			// _input = GetComponent<StarterAssetsInputs>();
 #if ENABLE_INPUT_SYSTEM
 			_playerInput = GetComponent<PlayerInput>();
 #else
@@ -117,10 +117,10 @@ namespace StarterAssets
 			Move();
 		}
 
-		private void LateUpdate()
-		{
-			CameraRotation();
-		}
+		// private void LateUpdate()
+		// {
+		// 	CameraRotation();
+		// }
 
 		private void GroundedCheck()
 		{
@@ -129,75 +129,75 @@ namespace StarterAssets
 			Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers, QueryTriggerInteraction.Ignore);
 		}
 
-		private void CameraRotation()
-		{
-			// if there is an input
-			if (_input.look.sqrMagnitude >= _threshold)
-			{
-				//Don't multiply mouse input by Time.deltaTime
-				float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
+		// private void CameraRotation()
+		// {
+		// 	// if there is an input
+		// 	if (_input.look.sqrMagnitude >= _threshold)
+		// 	{
+		// 		//Don't multiply mouse input by Time.deltaTime
+		// 		float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
 				
-				_cinemachineTargetPitch += _input.look.y * RotationSpeed * deltaTimeMultiplier;
-				_rotationVelocity = _input.look.x * RotationSpeed * deltaTimeMultiplier;
+		// 		_cinemachineTargetPitch += _input.look.y * RotationSpeed * deltaTimeMultiplier;
+		// 		_rotationVelocity = _input.look.x * RotationSpeed * deltaTimeMultiplier;
 
-				// clamp our pitch rotation
-				_cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
+		// 		// clamp our pitch rotation
+		// 		_cinemachineTargetPitch = ClampAngle(_cinemachineTargetPitch, BottomClamp, TopClamp);
 
-				// Update Cinemachine camera target pitch
-				CinemachineCameraTarget.transform.localRotation = Quaternion.Euler(_cinemachineTargetPitch, 0.0f, 0.0f);
+		// 		// Update Cinemachine camera target pitch
+		// 		CinemachineCameraTarget.transform.localRotation = Quaternion.Euler(_cinemachineTargetPitch, 0.0f, 0.0f);
 
-				// rotate the player left and right
-				transform.Rotate(Vector3.up * _rotationVelocity);
-			}
-		}
+		// 		// rotate the player left and right
+		// 		transform.Rotate(Vector3.up * _rotationVelocity);
+		// 	}
+		// }
 
         private void Move()
         {
-            float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
+            // float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
 
-            if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+            // if (_input.move == Vector2.zero) targetSpeed = 0.0f;
 
-            float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
+            // float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
 
-            float speedOffset = 0.1f;
-            float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
+            // float speedOffset = 0.1f;
+            // float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
 
-            if (currentHorizontalSpeed < targetSpeed - speedOffset || currentHorizontalSpeed > targetSpeed + speedOffset)
-            {
-                _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude, Time.deltaTime * SpeedChangeRate);
-                _speed = Mathf.Round(_speed * 1000f) / 1000f;
-            }
-            else
-            {
-                _speed = targetSpeed;
-            }
+            // if (currentHorizontalSpeed < targetSpeed - speedOffset || currentHorizontalSpeed > targetSpeed + speedOffset)
+            // {
+            //     _speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude, Time.deltaTime * SpeedChangeRate);
+            //     _speed = Mathf.Round(_speed * 1000f) / 1000f;
+            // }
+            // else
+            // {
+            //     _speed = targetSpeed;
+            // }
 
-            Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
+            // Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
 
-            if (_input.move != Vector2.zero)
-            {
-                inputDirection = transform.right * _input.move.x + transform.forward * _input.move.y;
-            }
+            // if (_input.move != Vector2.zero)
+            // {
+            //     inputDirection = transform.right * _input.move.x + transform.forward * _input.move.y;
+            // }
 
-            Vector3 moveDir = inputDirection.normalized;
+            // Vector3 moveDir = inputDirection.normalized;
 
-            // ✅ Obstacle detection with SphereCast
-            if (moveDir != Vector3.zero)
-            {
-                RaycastHit hit;
-                float radius = 0.5f;      // character body radius
-                float detectDistance = 1.0f; // how far ahead to check
+            // // ✅ Obstacle detection with SphereCast
+            // if (moveDir != Vector3.zero)
+            // {
+            //     RaycastHit hit;
+            //     float radius = 0.5f;      // character body radius
+            //     float detectDistance = 1.0f; // how far ahead to check
 
-                if (Physics.SphereCast(transform.position + Vector3.up * 0.5f, radius, moveDir, out hit, detectDistance, LayerMask.GetMask("Obstacle")))
-                {
-                    // Slide along obstacle instead of blocking
-                    moveDir = Vector3.ProjectOnPlane(moveDir, hit.normal).normalized;
-                    //Debug.Log("Sliding along: " + hit.transform.name);
-                }
-            }
+            //     if (Physics.SphereCast(transform.position + Vector3.up * 0.5f, radius, moveDir, out hit, detectDistance, LayerMask.GetMask("Obstacle")))
+            //     {
+            //         // Slide along obstacle instead of blocking
+            //         moveDir = Vector3.ProjectOnPlane(moveDir, hit.normal).normalized;
+            //         //Debug.Log("Sliding along: " + hit.transform.name);
+            //     }
+            // }
 
-            _controller.Move(moveDir * (_speed * Time.deltaTime) +
-                            new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+            // _controller.Move(moveDir * (_speed * Time.deltaTime) +
+            //                 new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
         }
 
         private void JumpAndGravity()
@@ -214,11 +214,11 @@ namespace StarterAssets
 				}
 
 				// Jump
-				if (_input.jump && _jumpTimeoutDelta <= 0.0f)
-				{
-					// the square root of H * -2 * G = how much velocity needed to reach desired height
-					_verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-				}
+				// if (_input.jump && _jumpTimeoutDelta <= 0.0f)
+				// {
+				// 	// the square root of H * -2 * G = how much velocity needed to reach desired height
+				// 	_verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+				// }
 
 				// jump timeout
 				if (_jumpTimeoutDelta >= 0.0f)
@@ -238,7 +238,7 @@ namespace StarterAssets
 				}
 
 				// if we are not grounded, do not jump
-				_input.jump = false;
+				// _input.jump = false;
 			}
 
 			// apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)

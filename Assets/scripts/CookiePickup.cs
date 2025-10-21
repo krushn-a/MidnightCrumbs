@@ -29,22 +29,27 @@ public class CookiePickup : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // Find the player controller first
-        var fpc = other.GetComponentInParent<FirstPersonController>();
-        if (fpc == null) return;
+        if (!other.CompareTag("Player"))
+        {
+            return;
+        }
 
-        // Try to get inventory from same object, then parent/children, then fallback scene search
-        PlayerInventory inventory = fpc.GetComponent<PlayerInventory>()
-            ?? fpc.GetComponentInParent<PlayerInventory>()
-            ?? fpc.GetComponentInChildren<PlayerInventory>()
-#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
-            ?? UnityEngine.Object.FindFirstObjectByType<PlayerInventory>();
-#else
-            ?? FindObjectOfType<PlayerInventory>();
-#endif
+        PlayerInventory inventory = other.GetComponent<PlayerInventory>()
+            ?? other.GetComponentInParent<PlayerInventory>()
+            ?? other.GetComponentInChildren<PlayerInventory>();
+
         if (inventory == null)
         {
-            Debug.LogWarning("CookiePickup: PlayerInventory not found on player hierarchy.");
+#if UNITY_2023_1_OR_NEWER || UNITY_6000_0_OR_NEWER
+            inventory = UnityEngine.Object.FindFirstObjectByType<PlayerInventory>();
+#else
+            inventory = FindObjectOfType<PlayerInventory>();
+#endif
+        }
+
+        if (inventory == null)
+        {
+            Debug.LogWarning("CookiePickup: PlayerInventory not found on player or in scene.");
             return;
         }
 
@@ -56,8 +61,8 @@ public class CookiePickup : MonoBehaviour
         if (pickupVfxPrefab != null)
             Instantiate(pickupVfxPrefab, transform.position, Quaternion.identity);
 
-    // Notify listeners that this cookie has been collected
-    Collected?.Invoke(this);
+        // Notify listeners that this cookie has been collected
+        Collected?.Invoke(this);
 
         Destroy(gameObject);
     }
